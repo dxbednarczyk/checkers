@@ -15,14 +15,14 @@ var (
 )
 
 func main() {
-	lf, err := os.Open(os.Args[len(os.Args)-1])
+	logFile, err := os.Open(os.Args[len(os.Args)-1])
 	if err != nil {
 		panic(err)
 	}
 
-	defer lf.Close()
+	defer logFile.Close()
 
-	log := bufio.NewScanner(lf)
+	log := bufio.NewScanner(logFile)
 	if !log.Scan() {
 		panic("Empty log file")
 	}

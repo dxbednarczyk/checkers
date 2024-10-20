@@ -11,3 +11,12 @@ logs:
     go run cmd/checkers/checkers.go logs/xld.log
     go run cmd/checkers/checkers.go logs/xld-error.log
     go run cmd/checkers/checkers.go logs/xld-noacc.log
+
+lint:
+    gofumpt -l -w .
+
+    go vet ./...
+    go mod tidy
+    go clean
+
+    golangci-lint -c .golangci-lint.yml run

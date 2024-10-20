@@ -1,0 +1,18 @@
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - dupword
+    - wsl
+    - varnamelen
+    - usestdlibvars
+    - unparam
+    - revive
+    - prealloc
+    - misspell
+    - gocyclo
+    - bodyclose

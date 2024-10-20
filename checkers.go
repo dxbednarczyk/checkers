@@ -3,9 +3,11 @@ package checkers
 import (
 	"regexp"
 	"strings"
+
+	"github.com/agnivade/levenshtein"
 )
 
-var virtual_drives = []string{
+var virtualDrives = []string{
 	"Generic DVD-ROM",
 	"Generic DVD-ROM SCSI CdRom Device",
 }
@@ -53,4 +55,26 @@ func ParseDrive(drive []any) Drive {
 		Offset:     int(drive[1].(float64)),
 		Score:      int(drive[3].(float64)),
 	}
+}
+
+func GetClosestDrive(driveName string) Drive {
+	parsed := ParseDrive([]any{driveName, 0.0, "", 0.0})
+	lowestDistance := 999
+
+	var drive Drive
+
+	for _, d := range Drives {
+		distance := levenshtein.ComputeDistance(d.Identifier, parsed.Identifier)
+
+		if distance < lowestDistance {
+			lowestDistance = distance
+			drive = d
+		}
+
+		if distance == 0 {
+			break
+		}
+	}
+
+	return drive
 }

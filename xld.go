@@ -8,14 +8,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/agnivade/levenshtein"
 )
 
-const xld_date_format = "20060102"
-const minimum_xld_version = "20100701"
+const (
+	xldDateFormat     = "20060102"
+	minimumXLDVersion = "20100701"
+)
 
-var cutoff, _ = time.Parse(xld_date_format, minimum_xld_version)
+var cutoff, _ = time.Parse(xldDateFormat, minimumXLDVersion)
 
 func XLD(log *bufio.Scanner) error {
 	if err := validVersion(log); err != nil {
@@ -31,12 +31,12 @@ func XLD(log *bufio.Scanner) error {
 
 	fmt.Printf("Checking XLD log for %s - %s\n", album.Artist, album.Title)
 
-	err = verifySettings(log)
+	err = verifyDriveSettings(log)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Verified rip settings")
+	fmt.Println("Verified drive settings")
 
 	err = checkAccurateRip(log)
 	if err != nil {
@@ -44,6 +44,13 @@ func XLD(log *bufio.Scanner) error {
 	}
 
 	fmt.Println("Verified AccurateRip data")
+
+	err = checkAllTracks(log)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Verified macro track data")
 
 	return nil
 }
@@ -56,7 +63,7 @@ func validVersion(log *bufio.Scanner) error {
 		return err
 	}
 
-	date, err := time.Parse(xld_date_format, datestr)
+	date, err := time.Parse(xldDateFormat, datestr)
 	if err != nil {
 		return err
 	}
@@ -85,7 +92,7 @@ func albumInfo(log *bufio.Scanner) (*Album, error) {
 	return &album, nil
 }
 
-func verifySettings(log *bufio.Scanner) error {
+func verifyDriveSettings(log *bufio.Scanner) error {
 	for log.Scan() {
 		if strings.HasPrefix(log.Text(), "Used") {
 			break
@@ -98,26 +105,11 @@ func verifySettings(log *bufio.Scanner) error {
 		return errors.New("null drive information")
 	}
 
-	if slices.Contains(virtual_drives, driveName) {
+	if slices.Contains(virtualDrives, driveName) {
 		return errors.New("virtual drive detected")
 	}
 
-	parsed := ParseDrive([]any{driveName, 0.0, "", 0.0})
-	lowestDistance := 999
-	var drive Drive
-
-	for _, d := range Drives {
-		distance := levenshtein.ComputeDistance(d.Identifier, parsed.Identifier)
-
-		if distance < lowestDistance {
-			lowestDistance = distance
-			drive = d
-		}
-
-		if distance == 0 {
-			break
-		}
-	}
+	drive := GetClosestDrive(driveName)
 
 	if drive.Score < 100 {
 		return errors.New("drive score is too low")
@@ -129,10 +121,15 @@ func verifySettings(log *bufio.Scanner) error {
 		return errors.New("media type must be pressed cd")
 	}
 
-	log.Scan()
-	log.Scan()
+	for log.Scan() {
+		if strings.HasPrefix(log.Text(), "Ripper") {
+			break
+		}
+	}
 
-	if !strings.Contains(log.Text(), "XLD Secure Ripper") {
+	_, ripper, _ := strings.Cut(log.Text(), ": ")
+
+	if !strings.Contains(ripper, "XLD Secure Ripper") {
 		return errors.New("ripper mode must be secure")
 	}
 
@@ -150,9 +147,9 @@ func verifySettings(log *bufio.Scanner) error {
 
 	log.Scan()
 
-	_, offset_s, _ := strings.Cut(log.Text(), ": ")
+	_, offsetString, _ := strings.Cut(log.Text(), ": ")
 
-	offset, err := strconv.Atoi(offset_s)
+	offset, err := strconv.Atoi(offsetString)
 	if err != nil {
 		return errors.New("invalid offset value")
 	}
@@ -162,8 +159,6 @@ func verifySettings(log *bufio.Scanner) error {
 	}
 
 	if offset != drive.Offset {
-		fmt.Println(drive.Identifier)
-		fmt.Println(drive.Offset)
 		return errors.New("read offset does not match drive data")
 	}
 
@@ -175,8 +170,13 @@ func verifySettings(log *bufio.Scanner) error {
 	}
 
 	var count int
+
 	_, err = fmt.Sscanf(maxRetries, "%d", &count)
-	if err != nil || count < 10 {
+	if err != nil {
+		return err
+	}
+
+	if count < 10 {
 		return errors.New("max retries must be at least 10")
 	}
 
