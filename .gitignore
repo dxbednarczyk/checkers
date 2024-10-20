@@ -1,6 +1,7 @@
 .DS_Store
 drives.go
 *.log
+logs/
 
 # Past here is GitHub recommended .gitingore for Go
 *.exe

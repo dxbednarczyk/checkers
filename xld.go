@@ -38,6 +38,13 @@ func XLD(log *bufio.Scanner) error {
 
 	fmt.Println("Verified rip settings")
 
+	err = checkAccurateRip(log)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Verified AccurateRip data")
+
 	return nil
 }
 
@@ -79,13 +86,13 @@ func albumInfo(log *bufio.Scanner) (*Album, error) {
 }
 
 func verifySettings(log *bufio.Scanner) error {
-	log.Scan()
-	log.Scan()
-
-	_, driveName, found := strings.Cut(log.Text(), ": ")
-	if !found {
-		return errors.New("no drive information found")
+	for log.Scan() {
+		if strings.HasPrefix(log.Text(), "Used") {
+			break
+		}
 	}
+
+	_, driveName, _ := strings.Cut(log.Text(), ": ")
 
 	if strings.Contains(driveName, "null") {
 		return errors.New("null drive information")
@@ -105,6 +112,10 @@ func verifySettings(log *bufio.Scanner) error {
 		if distance < lowestDistance {
 			lowestDistance = distance
 			drive = d
+		}
+
+		if distance == 0 {
+			break
 		}
 	}
 
@@ -139,12 +150,13 @@ func verifySettings(log *bufio.Scanner) error {
 
 	log.Scan()
 
-	_, offset_s, found := strings.Cut(log.Text(), ": ")
-	if !found {
-		return errors.New("no read offset information found")
-	}
+	_, offset_s, _ := strings.Cut(log.Text(), ": ")
 
 	offset, err := strconv.Atoi(offset_s)
+	if err != nil {
+		return errors.New("invalid offset value")
+	}
+
 	if offset == 0 {
 		return errors.New("read offset is almost never zero")
 	}
@@ -157,15 +169,69 @@ func verifySettings(log *bufio.Scanner) error {
 
 	log.Scan()
 
-	_, retries, found := strings.Cut(log.Text(), ": ")
-	if !found || retries == "" {
-		return errors.New("no retries information found")
+	_, maxRetries, _ := strings.Cut(log.Text(), ": ")
+	if maxRetries == "" {
+		return errors.New("no max retry information found")
 	}
 
 	var count int
-	_, err = fmt.Sscanf(retries, "%dt", &count)
+	_, err = fmt.Sscanf(maxRetries, "%d", &count)
 	if err != nil || count < 10 {
-		return errors.New("retries must be at least 10")
+		return errors.New("max retries must be at least 10")
+	}
+
+	return nil
+}
+
+func checkAccurateRip(log *bufio.Scanner) error {
+	for log.Scan() {
+		if strings.HasPrefix(strings.TrimSpace(log.Text()), "-") {
+			break
+		}
+	}
+
+	if strings.Contains(log.Text(), "not") {
+		return errors.New("at least one track was not accurately ripped")
+	}
+
+	return nil
+}
+
+func checkAllTracks(log *bufio.Scanner) error {
+	for log.Scan() {
+		if strings.Contains(log.Text(), "Statistics") {
+			break
+		}
+	}
+
+	log.Scan()
+
+	_, readErrors, _ := strings.Cut(log.Text(), ": ")
+
+	count, err := strconv.Atoi(readErrors)
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return errors.New("rip had at least one read error")
+	}
+
+	for log.Scan() {
+		if strings.Contains(log.Text(), "Damaged") {
+			break
+		}
+	}
+
+	_, damaged, _ := strings.Cut(log.Text(), ": ")
+
+	count, err = strconv.Atoi(damaged)
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return errors.New("rip had at least one damaged sector")
 	}
 
 	return nil
